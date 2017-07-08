@@ -9,15 +9,8 @@ namespace Raise_the_FLAG
 	class softplus_function : public _activation_function
 	{
 	public:
-		virtual double activate(double value)
-		{
-			return std::log(1.0 + std::exp(value));
-		}
-		virtual double activate_differential(double value)
-		{
-			double e_x = std::exp(value);
-			return e_x / (1.0 + e_x);
-		}
+		virtual double activate(double value);
+		virtual double activate_differential(double value);
 	};
 }
 

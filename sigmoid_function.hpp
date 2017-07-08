@@ -9,15 +9,8 @@ namespace Raise_the_FLAG
 	class sigmoid_function : public _activation_function
 	{
 	public:
-		virtual double activate(double value)
-		{
-			return 1.0 / (1.0 + std::exp(-value));
-		}
-		virtual double activate_differential(double value)
-		{
-			double temp = activate(value);
-			return (1.0 - temp) * temp;
-		}
+		virtual double activate(double value);
+		virtual double activate_differential(double value);
 	};
 }
 

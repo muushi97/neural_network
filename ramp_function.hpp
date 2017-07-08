@@ -9,16 +9,8 @@ namespace Raise_the_FLAG
 	class ramp_function : public _activation_function
 	{
 	public:
-		virtual double activate(double value)
-		{
-			return value > 0.0 ? value : 0.0;
-		}
-		virtual double activate_differential(double value)
-		{
-			if (value == 0.0)
-				return 0.5;
-			return value > 0.0 ? 1.0 : 0.0;
-		}
+		virtual double activate(double value);
+		virtual double activate_differential(double value);
 	};
 }
 
