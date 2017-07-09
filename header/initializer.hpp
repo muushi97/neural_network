@@ -1,8 +1,6 @@
 #ifndef IG_INITIALIZER_HPP
 #define IG_INITIALIZER_HPP
 
-#include <random>
-
 namespace Raise_the_FLAG
 {
 	class perceptron;

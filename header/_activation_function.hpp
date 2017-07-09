@@ -10,8 +10,8 @@ namespace Raise_the_FLAG
 	class _activation_function
 	{
 	public:
-		virtual double activate(double value);
-		virtual double activate_differential(double value);
+		virtual double activate(double value) = 0;
+		virtual double activate_differential(double value) = 0;
 	};
 }
 

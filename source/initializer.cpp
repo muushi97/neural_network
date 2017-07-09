@@ -1,5 +1,7 @@
 #include "initializer.hpp"
 
+#include <random>
+
 #include "perceptron.hpp"
 
 using namespace Raise_the_FLAG;
