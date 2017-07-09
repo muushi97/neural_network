@@ -1,6 +1,7 @@
 #include "initializer.hpp"
 
 #include <random>
+#include <ctime>
 
 #include "perceptron.hpp"
 
@@ -10,7 +11,8 @@ using namespace Raise_the_FLAG;
 void initializer::initialize(perceptron &Network)
 {
 	std::random_device random;
-	std::mt19937 engine(random());
+	//std::mt19937 engine(random());		// MinGWでは random_device が擬似乱数生成器として定義されるため，シード値として使えない
+	std::mt19937 engine(std::time(NULL));
 
 	// (平均, 標準偏差)
 	std::normal_distribution<> n_dist(0.0, 1.0);

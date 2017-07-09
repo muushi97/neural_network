@@ -10,6 +10,8 @@
 
 #include "activation_function.hpp"
 
+#include <random>
+
 namespace Raise_the_FLAG
 {
 	void test()
@@ -29,10 +31,10 @@ namespace Raise_the_FLAG
 		init.initialize(net);
 
 		// 出力値を表示
-		//std::cout << "0 0 , " << net({0.0, 0.0})[0] << std::endl;
-		//std::cout << "0 1 , " << net({0.0, 1.0})[0] << std::endl;
-		//std::cout << "1 0 , " << net({1.0, 0.0})[0] << std::endl;
-		//std::cout << "1 1 , " << net({1.0, 1.0})[0] << std::endl;
+		std::cout << "0 0 , " << net({0.0, 0.0})[0] << std::endl;
+		std::cout << "0 1 , " << net({0.0, 1.0})[0] << std::endl;
+		std::cout << "1 0 , " << net({1.0, 0.0})[0] << std::endl;
+		std::cout << "1 1 , " << net({1.0, 1.0})[0] << std::endl;
 
 		// 学習装置と変化量オブジェクトを生成
 		learning_device testament(0.5);
@@ -68,18 +70,16 @@ namespace Raise_the_FLAG
 }
 
 int main()
-{/**/
-	while (1)
+{
+	Raise_the_FLAG::test();
+
+	/*while (1)
 	{
-		Raise_the_FLAG::test();
 		Raise_the_FLAG::test();
 
 		if (!(getchar()))
 			break;
 	}/**/
-
-	// げっちゃぁ
-	getchar();
 
 	return 0;
 }
