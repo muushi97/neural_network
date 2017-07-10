@@ -7,25 +7,30 @@
 
 using namespace Raise_the_FLAG;
 
+// 今ストラクた
+initializer::initializer() : initializer(-1.0, 1.0)
+{ }
+initializer::initializer(double min, double max) : m_engine(std::time(NULL))
+{
+	// MinGWでは random_device が擬似乱数生成器として定義されるため，シード値として使えない
+	// std::random_device random;
+	// std::mt19937 engine(random());
+
+	m_min = min; m_max = max;
+}
+
 // 初期化
 void initializer::initialize(perceptron &Network)
 {
-	std::random_device random;
-	//std::mt19937 engine(random());		// MinGWでは random_device が擬似乱数生成器として定義されるため，シード値として使えない
-	std::mt19937 engine(std::time(NULL));
-
-	// (平均, 標準偏差)
-	std::normal_distribution<> n_dist(0.0, 1.0);
-
 	// (最小値, 最大値)
-	std::uniform_real_distribution<> ur_dist(-1.0, 1.0);
+	std::uniform_real_distribution<> ur_dist(m_min, m_max);
 
 	// 閾値の初期化
 	for (unsigned int i = 2; i <= Network.NetworkSize(); ++i)
 	{
 		for (unsigned int j = 1; j <= Network.LayerSize(i); ++j)
 		{
-			Network.Threshold(i, j) = ur_dist(engine);
+			Network.Threshold(i, j) = ur_dist(m_engine);
 		}
 	}
 
@@ -36,7 +41,7 @@ void initializer::initialize(perceptron &Network)
 		{
 			for (unsigned int k = 1; k <= Network.LayerSize(i + 1); ++k)
 			{
-				Network.Weight(i, j, k) = ur_dist(engine);
+				Network.Weight(i, j, k) = ur_dist(m_engine);
 			}
 		}
 	}
