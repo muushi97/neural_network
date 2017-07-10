@@ -1,0 +1,5 @@
+# exe is gomi
+*.exe
+
+# object is dust
+object/
