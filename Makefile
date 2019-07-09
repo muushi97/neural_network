@@ -1,23 +1,65 @@
-CXX  = g++
-CXXFLAGS    = -std=c++14 -static
-INCLUDE   = -I./header
-TARGETS   = run.exe
-TARGETDIR = ./
-SRCDIR   = ./source
-OBJDIRS   = ./object
-SOURCES   = $(wildcard $(SRCDIR)/*.cpp)
-OBJECTS   = $(subst $(SRCDIR),$(OBJDIRS), $(SOURCES:.cpp=.o))
+# ---------------------------------------------------------------------- #
+#                                                                        #
+#             __  __       _        _____ _ _                            #
+#            |  \/  | __ _| | _____|  ___(_) | ___                       #
+#            | |\/| |/ _` | |/ / _ \ |_  | | |/ _ \                      #
+#            | |  | | (_| |   <  __/  _| | | |  __/                      #
+#            |_|  |_|\__,_|_|\_\___|_|   |_|_|\___|                      #
+#                                                                        #
+# ---------------------------------------------------------------------- #
 
+# コンパイラ
+CXX        = g++
+#CXX        = clang++
+# コンパイラオプション
+CXXFLAGS   = -std=c++1y -static -g -O0
+#CXXFLAGS   = -std=c++1y -static -g -O3 -mtune=native -march=native
+# インクルードディレクトリ
+INCLUDE    = -I./inc
+# 出力ファイル名
+TARGETS    = run.momiage
+# 出力ディレクトリ
+TARGETDIR  = .
+# ソースのルートディレクトリ
+SRCROOT    = ./src
+# オブジェクトファイルのルートディレクトリ
+OBJROOT    = ./obj
+# ソースファイルが直下にあるディレクトリたち
+SRCDIRS    = $(shell find $(SRCROOT) -type d)
+# ソースファイルたち
+SOURCES    = $(foreach dir, $(SRCDIRS), $(wildcard $(dir)/*.cpp))
+# オブジェクトファイルたち
+OBJECTS    = $(subst $(SRCROOT), $(OBJROOT), $(SOURCES:.cpp=.o))
+# オブジェクトファイルが直下にあるディレクトリたち
+OBJDIRS    = $(subst $(SRCROOT), $(OBJROOT), $(SRCDIRS))
+# 依存関係ファイル
+DEPENDS    = $(OBJECTS:.o=.d)
+
+
+# リンク
 $(TARGETS): $(OBJECTS)
-	$(CXX) $(CXXFLAGS) -o $(TARGETDIR)$@ $^
+	$(CXX) $(CXXFLAGS) -o $(TARGETDIR)/$@ $^
 
-$(OBJDIRS)/%.o: $(SRCDIR)/%.cpp
-	$(CXX) $(CXXFLAGS) $(INCLUDE) -o $@ -c $<
+# 依存関係からビルド
+-include $(DEPENDS)
 
-$(OBJDIRS)/%.o: $(INCLUDE)/%.hpp
+# オブジェクトファイルほしい
+$(OBJROOT)/%.o: $(SRCROOT)/%.cpp
+	@if [ ! -e $(dir $@) ]; then mkdir -p $(dir $@); fi
+	$(CXX) $(CXXFLAGS) -MMD -MP $(INCLUDE) -o $@ -c $<
 
-all: clear $(TARGETS)
+# 篠沢教授に全部
+all: clean $(TARGETS)
 
-clear:
-	rm $(TARGETDIR)$(TARGETS)
-	rm $(OBJDIRS)/*.o
+# さよならバイバイ
+clean:
+	- rm $(addsuffix /*.o, $(OBJDIRS))
+	- rm $(addsuffix /*.d, $(OBJDIRS))
+	- rm $(TARGETDIR)/$(TARGETS)
+
+run: $(TARGETS)
+	- ./$(TARGETS)
+
+# こいつらファイルじゃない
+.PHONY: all clean
+
