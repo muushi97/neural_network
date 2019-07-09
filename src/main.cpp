@@ -1,43 +1,63 @@
 #include <cstdio>
 #include <iostream>
+#include <array>
+#include <tuple>
 
-template <class T>
-class dual_number {
-private:
-    T x;
-    T x_dash;
+template <std::size_t... Ns>
+struct mul_template_parameter;
+template <std::size_t N, std::size_t... Ns>
+struct mul_template_parameter<N, Ns...> { static constexpr std::size_t value = N * mul_template_parameter<Ns...>::value; };
+template <>
+struct mul_template_parameter<> { static constexpr std::size_t value = 1; };
+
+template <std::size_t I, std::size_t J, std::size_t... Ns>
+struct at_template_parameter;
+template <std::size_t I, std::size_t J, std::size_t N, std::size_t... Ns>
+struct at_template_parameter<I, J, N, Ns...> {
+    static constexpr std::size_t value = at_template_parameter<I, J+1, Ns...>::value;
+};
+template <std::size_t I, std::size_t N, std::size_t... Ns>
+struct at_template_parameter<I, I, N, Ns...> {
+    static constexpr std::size_t value = N;
+};
+
+template <class T, std::size_t... Ns>
+class tensor {
+    static constexpr std::size_t Rank = sizeof...(Ns);
+    static constexpr std::size_t Dimension[sizeof...(Ns)] = { Ns... };
+    std::array<T, mul_template_parameter<Ns...>::value> t;
+
 
 public:
-    dual_number() : dual_number(0, 0) { }
-    dual_number(const T x, const T x_dash) : x(x), x_dash(x_dash) { }
+    tensor() {
+    }
 
-    T &value() { return x; }
-    T &diff() { return x_dash; }
-    const T &value() const { return x; }
-    const T &diff() const { return x_dash; }
+    constexpr std::size_t dimension(int i) const { return i < Rank ? Dimension[i] : 0; }
+    constexpr std::size_t rank() const { return Rank; }
+    constexpr std::size_t order() const {
+        int o = 0;
+        for (int i = 0; i < rank(); i++) o += dimension(i);
+        return o;
+    }
+    constexpr std::size_t size() const { return t.size(); }
 
-    template <class U1, class U2>
-    static inline auto add(const dual_number<U1> &a, const dual_number<U2> &b) {
-        return dual_number<decltype(a.x + b.x)>(a.x + b.x, a.x_dash + b.x_dash); }
-    template <class U1, class U2>
-    static inline auto sub(const dual_number<U1> &a, const dual_number<U2> &b) {
-        return dual_number<decltype(a.x - b.x)>(a.x - b.x, a.x_dash - b.x_dash); }
-    static inline auto mul(const dual_number<U1> &a, const dual_number<U2> &b) {
-        return dual_number<decltype(a.x * b.x)>(a.x * b.x, a.x_dash * b.x + a.x * b.x_dash); }
-    static inline auto div(const dual_number<U1> &a, const dual_number<U2> &b) {
-        return dual_number<decltype(a.x / b.x)>(a.x / b.x, (a.x_dash * b.x - a.x * b.x_dash) / (b.x * b.x)); }
 };
+template <class T, std::size_t... Ns>
+constexpr std::size_t tensor<T, Ns...>::Dimension[];
 
 using namespace std;
 
 int main() {
-    dual_number<double> a(1, 0);
-    dual_number<double> b(10, 1);
+    //vector<double> w;
+    tensor<double> a;
 
-    dual_number<double> c = a.add(a, b);
-    cout << a.value() << endl;
-    cout << b.value() << endl;
-    cout << c.value() << endl;
+    cout << a.dimension(0) << endl;
+    cout << a.dimension(1) << endl;
+    cout << a.dimension(2) << endl;
+    cout << a.dimension(3) << endl;
+    cout << a.rank() << endl;
+    cout << a.order() << endl;
+    cout << a.size() << endl;
 
     return 0;
 }
