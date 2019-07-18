@@ -1,5 +1,5 @@
-# exe is gomi
 *.exe
-
-# object is dust
+*.momiage
 object/
+obj/
+

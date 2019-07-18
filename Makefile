@@ -12,8 +12,8 @@
 CXX        = g++
 #CXX        = clang++
 # コンパイラオプション
-CXXFLAGS   = -std=c++14 -static -g -O0
-#CXXFLAGS   = -std=c++14 -static -g -O3 -mtune=native -march=native
+CXXFLAGS   = -std=c++17 -static -g -O0
+#CXXFLAGS   = -std=c++17 -static -g -O3 -mtune=native -march=native
 # インクルードディレクトリ
 INCLUDE    = -I./inc
 # 出力ファイル名
