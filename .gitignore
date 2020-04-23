@@ -1,5 +1,1 @@
-*.exe
-*.momiage
-object/
-obj/
-
+.template/.gitignore

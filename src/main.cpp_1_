@@ -1,0 +1,565 @@
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <tuple>
+#include <array>
+#include <initializer_list>
+#include <random>
+#include <ctime>
+#include <functional>
+
+template <class T>
+class tensor {
+    std::size_t Rank;               // 階数
+    std::vector<std::size_t> Dim;   // 各階の要素数
+    std::size_t Order;              // Ns + ... + 0
+    std::size_t Size;               // Ns * ... * 1
+
+    std::vector<T> t;
+
+    template <class I, class... Is>
+    std::size_t getIndex(std::size_t r, I i, Is... is) const { return i + Dim[r] * getIndex<Is...>(r+1, is...); }
+    template <class I, class... Is>
+    std::size_t getIndex(std::size_t r, I i) const { return i; }
+
+    template <class... Is>
+    void init(T x, Is... is) { (*this)(is...) = x; }
+    template <class U, class... Is>
+    void init(U x, Is... is) { std::size_t i = 0; for (auto &&e : x) init(e, is..., i), i++; }
+
+public:
+    // コンストラクタ
+    template <class... Is>
+    tensor(Is... is) {
+        Rank = sizeof...(is);
+        Dim = { static_cast<std::size_t>(is)... };
+        Order = (is + ... + 0);
+        Size = (is * ... * 1);
+
+        t = std::vector<T>(Size, 0.0);
+    }
+    //tensor(typename type_nesting<T, std::initializer_list, Rank>::type x) { init(x); }
+    tensor(const tensor<T> &x) : Rank(x.Rank), Dim(x.Dim), Order(x.Order), Size(x.Size), t(x.t) { }
+
+    // 代入
+    //const this_tensor &operator=(typename type_nesting<T, std::initializer_list, Rank>::type x) { init(x); return *this; }
+    const tensor<T> &operator=(const tensor<T> &x) {
+        Rank = x.Rank;
+        Dim = x.Dim;
+        Order = x.Order;
+        Size = x.Size;
+        t.resize(Size);
+
+        for (std::size_t i = 0; i < Size; i++) t[i] = x.t[i];
+        return *this;
+    }
+
+    // 次元や添字の情報等を得る関数
+    constexpr std::size_t dimension(std::size_t i) const { return i < Rank ? Dim[i] : 0; }
+    constexpr std::size_t rank() const { return Rank; }
+    constexpr std::size_t order() const { return Order; }
+    constexpr std::size_t size() const { return Size; }
+
+    template <class... Is>
+    T &operator () (Is... is) {
+        return t[getIndex<Is...>(0, is...)];
+    }
+    template <class... Is>
+    const T &operator () (Is... is) const {
+        return t[getIndex<Is...>(0, is...)];
+    }
+    template <class... Is>
+    T operator () (Is... is) const&& {
+        return t[getIndex<Is...>(0, is...)];
+    }
+};
+
+class perceptron;
+class perceptron_parameter;
+
+class _activation_function {
+public:
+    virtual double activate(double value) = 0;
+    virtual double activate_differential(double value) = 0;
+};
+
+class initializer {
+private:
+    std::mt19937 m_engine;
+    double m_min, m_max;
+
+public:
+    // 今ストラクた
+    initializer();
+    initializer(double min, double max);
+
+    // 初期化
+    void initialize(perceptron &Network);
+};
+
+
+class perceptron_parameter {
+    friend class learning_device;
+
+private:
+    std::vector<unsigned int> m_NetworkForm;
+    std::vector<std::vector<double>> m_NeuronOutput;
+    std::vector<std::vector<double>> m_NeuronValue;
+    std::vector<std::vector<double>> m_Threshold;
+    std::vector<std::vector<double>> m_Weight;
+
+protected:
+    // あるニューロンの出力値を参照する
+    double &NeuronOutput(unsigned int LayerNumber, unsigned int NeuronNumber);
+    // あるニューロンの値を参照する
+    double &NeuronValue(unsigned int LayerNumber, unsigned int NeuronNumber);
+    // あるニューロンの閾値を参照する
+    double &Threshold(unsigned int LayerNumber, unsigned int NeuronNumber);
+    // あるニューロンと，あるニューロン間の重みを参照する
+    double &Weight(unsigned int LayerNumber, unsigned int SourceNeuronNumber, unsigned int DistinationNeuronNumber);
+
+    // ネットワークのサイズ(層数)を返す
+    unsigned int NetworkSize() const;
+    // ある層のサイズ(ニューロン数)を返す
+    unsigned int LayerSize(unsigned int LayerNumber) const;
+
+public:
+    // コンストラクタ
+    perceptron_parameter(std::vector<unsigned int> NetworkForm);
+
+};
+class perceptron : public perceptron_parameter {
+    friend class initializer;
+    friend class learning_device;
+
+private:
+    std::vector<double> m_InputSignal;
+    std::vector<double> m_OutputSignal;
+
+    _activation_function *m_ActivationFunction;
+
+public:
+    // コンストラクタ
+    perceptron(std::vector<unsigned int> NetworkForm, _activation_function *ActivationFunction);
+
+    // 入力
+    void input(std::vector<double> InputSignal);
+    // 順伝播
+    void propagate();
+    // 出力
+    const std::vector<double> &output() const;
+
+    // 入力，順伝播，出力をまとめて行う
+    const std::vector<double> &operator() (std::vector<double> InputSignal);
+
+    // ネットワークのサイズ(層数)を返す
+    unsigned int NetworkSize() const;
+    // ある層のサイズ(ニューロン数)を返す
+    unsigned int LayerSize(unsigned int LayerNumber) const;
+
+};
+
+class learning_device {
+private:
+    double m_LearningCoefficient;
+
+public:
+    // コンストラクタ
+    learning_device(double LearningCoefficient);
+
+    // 学修係数のセット
+    void setLearningCoefficient(double LearningCoefficient);
+
+    // 重み，及び閾値の更新料を計算
+    void calculate_difference(perceptron &network, perceptron_parameter &parameter, std::vector<double> InputSignal, std::vector<double> TeacherSignal);
+
+    // 更新量分，更新する
+    void learn(perceptron &network, perceptron_parameter &parameter);
+
+};
+
+// シグモイド関数
+class sigmoid_function : public _activation_function {
+public:
+    virtual double activate(double value);
+    virtual double activate_differential(double value);
+};
+// ソフトプラス関数
+class softplus_function : public _activation_function {
+public:
+    virtual double activate(double value);
+    virtual double activate_differential(double value);
+};
+
+// 今ストラクた
+initializer::initializer() : initializer(-1.0, 1.0) { }
+initializer::initializer(double min, double max) : m_engine(std::time(NULL)) {
+	// MinGWでは random_device が擬似乱数生成器として定義されるため，シード値として使えない
+	// std::random_device random;
+	// std::mt19937 engine(random());
+
+	m_min = min; m_max = max;
+}
+
+// 初期化
+void initializer::initialize(perceptron &Network) {
+	// (最小値, 最大値)
+	std::uniform_real_distribution<> ur_dist(m_min, m_max);
+
+	// 閾値の初期化
+	for (unsigned int i = 2; i <= Network.NetworkSize(); ++i)
+	{
+		for (unsigned int j = 1; j <= Network.LayerSize(i); ++j)
+		{
+			Network.Threshold(i, j) = ur_dist(m_engine);
+		}
+	}
+
+	// 重みの初期化
+	for (unsigned int i = 1; i <= Network.NetworkSize() - 1; ++i)
+	{
+		for (unsigned int j = 1; j <= Network.LayerSize(i); ++j)
+		{
+			for (unsigned int k = 1; k <= Network.LayerSize(i + 1); ++k)
+			{
+				Network.Weight(i, j, k) = ur_dist(m_engine);
+			}
+		}
+	}
+}
+
+// コンストラクタ
+learning_device::learning_device(double LearningCoefficient) {
+	setLearningCoefficient(LearningCoefficient);
+}
+
+// 学修係数のセット
+void learning_device::setLearningCoefficient(double LearningCoefficient) {
+	m_LearningCoefficient = LearningCoefficient;
+}
+
+// 重み，及び閾値の更新料を計算
+void learning_device::calculate_difference(perceptron &network, perceptron_parameter &parameter, std::vector<double> InputSignal, std::vector<double> TeacherSignal) {
+	network.input(InputSignal);
+	network.propagate();
+
+	double ganma;
+
+	unsigned int NetworkSize = network.NetworkSize();
+
+	// 閾値更新
+	for (unsigned int j = network.LayerSize(NetworkSize); j > 0; --j)
+	{
+		ganma = network.NeuronOutput(NetworkSize, j) - TeacherSignal[j - 1];
+		parameter.Threshold(NetworkSize, j) = ganma * network.m_ActivationFunction->activate_differential(network.NeuronValue(NetworkSize, j));
+	}
+	for (unsigned int i = NetworkSize - 1; i > 1; --i)
+	{
+		for (unsigned int j = network.LayerSize(i); j > 0; --j)
+		{
+			ganma = 0.0;
+			for (unsigned int k = network.LayerSize(i + 1); k > 0; --k)
+			{
+				ganma += parameter.Threshold(i + 1, k) * network.Weight(i, j, k);
+			}
+
+			parameter.Threshold(i, j) = ganma * network.m_ActivationFunction->activate_differential(network.NeuronValue(i, j));
+		}
+	}
+
+	// 重み更新
+	for (unsigned int i = NetworkSize - 1; i > 0; --i)
+	{
+		for (unsigned int j = network.LayerSize(i + 1); j > 0; --j)
+		{
+			for (unsigned int k = network.LayerSize(i); k > 0; --k)
+			{
+				parameter.Weight(i, k, j) = parameter.Threshold(i + 1, j) * network.NeuronOutput(i, k);
+			}
+		}
+	}
+
+
+}
+
+// 更新量分，更新する
+void learning_device::learn(perceptron &network, perceptron_parameter &parameter) {
+	// 閾値の更新
+	for (unsigned int i = 2; i <= network.NetworkSize(); ++i)
+	{
+		for (unsigned int j = 1; j <= network.LayerSize(i); ++j)
+		{
+			network.Threshold(i, j) += -1.0 * m_LearningCoefficient * parameter.Threshold(i, j);
+		}
+	}
+
+	// 重みの更新
+	for (unsigned int i = 1; i <= network.NetworkSize() - 1; ++i)
+	{
+		for (unsigned int j = 1; j <= network.LayerSize(i); ++j)
+		{
+			for (unsigned int k = 1; k <= network.LayerSize(i + 1); ++k)
+			{
+				network.Weight(i, j, k) += -1.0 * m_LearningCoefficient * parameter.Weight(i, j, k);
+			}
+		}
+	}
+}
+
+// コンストラクタ
+perceptron::perceptron(std::vector<unsigned int> NetworkForm, _activation_function *ActivationFunction) : perceptron_parameter(NetworkForm) {
+	m_ActivationFunction = ActivationFunction;
+
+	unsigned int Size = perceptron_parameter::NetworkSize();
+
+	m_InputSignal.resize(perceptron_parameter::LayerSize(1));
+	m_OutputSignal.resize(perceptron_parameter::LayerSize(Size));
+}
+
+// 入力
+void perceptron::input(std::vector<double> InputSignal) {/*
+ InputSignal を入力信号として，1層目の各ニューロンに書き込む
+
+ 配列 InputSignal の長さは，1層目のニューロンの数以上であるとする．もし，配列 InputSignal の長さが，1層目のニューロンの数よりも大きい場合は余った部分を無視する．
+ */
+	for (unsigned int i = 1; i <= LayerSize(1); ++i)
+	{
+		m_InputSignal[i - 1] = InputSignal[i - 1];
+		perceptron_parameter::NeuronOutput(1, i) = InputSignal[i - 1];
+	}
+}
+// 順伝播
+void perceptron::propagate() {/*
+ 現在の1層目(入力層)に入力されている値を伝播させる．
+ */
+	for (unsigned int i = 2; i <= perceptron_parameter::NetworkSize(); ++i)
+	{
+		for (unsigned int j = 1; j <= perceptron_parameter::LayerSize(i); ++j)
+		{
+			perceptron_parameter::NeuronValue(i , j) = perceptron_parameter::Threshold(i , j);
+			for (unsigned int k = 1; k <= perceptron_parameter::LayerSize(i - 1); ++k)
+			{
+				perceptron_parameter::NeuronValue(i , j) += perceptron_parameter::NeuronOutput(i - 1 , k) * perceptron_parameter::Weight(i - 1 , k , j);
+			}
+			perceptron_parameter::NeuronOutput(i , j) = m_ActivationFunction->activate(perceptron_parameter::NeuronValue(i , j));
+		}
+	}
+
+	unsigned int LastLayer = NetworkSize();
+	unsigned int Size = LayerSize(LastLayer);
+	for (unsigned int i = 1; i <= Size; ++i)
+	{
+		m_OutputSignal[i - 1] = perceptron_parameter::NeuronOutput(LastLayer , i);
+	}
+}
+// 出力
+const std::vector<double> &perceptron::output() const {/*
+ 最終層(出力層)を定数ベクトルとして返す
+ */
+	return m_OutputSignal;
+}
+
+// 入力，順伝播，出力をまとめて行う
+const std::vector<double> &perceptron::operator() (std::vector<double> InputSignal) {
+	input(InputSignal);
+	propagate();
+	return output();
+}
+
+// ネットワークのサイズ(層数)を返す
+unsigned int perceptron::NetworkSize() const {
+	return perceptron_parameter::NetworkSize();
+}
+// ある層のサイズ(ニューロン数)を返す
+unsigned int perceptron::LayerSize(unsigned int LayerNumber) const {/*
+ LayerNumber層目のニューロンの数を返す
+
+ LayerNumber はパーセプトロンの層数を最大値，最小値を 1 とする．
+ */
+	return perceptron_parameter::LayerSize(LayerNumber);
+}
+
+// あるニューロンの出力値を参照する
+double &perceptron_parameter::NeuronOutput(unsigned int LayerNumber, unsigned int NeuronNumber) {/*
+ LayerNumber層目のNeuronNumber番目のニューロンの出力値にアクセスする．
+
+ LayerNumber はパーセプトロンの層数を最大値，最小値を 1 とする
+ NeuronNumber は LayerNumber層目のニューロンの数を最大値，最小値を 1 とする
+ */
+	return m_NeuronOutput[LayerNumber - 1][NeuronNumber - 1];
+}
+// あるニューロンの値を参照する
+double &perceptron_parameter::NeuronValue(unsigned int LayerNumber, unsigned int NeuronNumber) {/*
+ LayerNumber層目のNeuronNumber番目のニューロンの値にアクセスする．なお，1層目は入力層であり，値は存在しないためLayerNumber に 1 が入力されることは想定しない．
+
+ LayerNumber はパーセプトロンの層数を最大値，最小値を 2 とする
+ NeuronNumber は LayerNumber層目のニューロンの数を最大値，最小値を 1 とする
+ */
+	return m_NeuronValue[LayerNumber - 2][NeuronNumber - 1];
+}
+// あるニューロンの閾値を参照する
+double &perceptron_parameter::Threshold(unsigned int LayerNumber, unsigned int NeuronNumber) {/*
+ LayerNumber層目のNeuronNumber番目のニューロンの閾値にアクセスする．なお，1層目は入力そうであり，閾値は存在しないためLayerNumber に 1 が入力されることは想定しない．
+
+ LayerNumber はパーセプトロンの層数を最大値，最小値を 2 とする
+ NeuronNumber は LayerNumber層目のニューロンの数を最大値，最小値を 1 とする
+ */
+	return m_Threshold[LayerNumber - 2][NeuronNumber - 1];
+}
+// あるニューロンと，あるニューロン間の重みを参照する
+double &perceptron_parameter::Weight(unsigned int LayerNumber, unsigned int SourceNeuronNumber, unsigned int DistinationNeuronNumber) {/*
+ LayerNumber層目のSourceNeuronNumber番目のニューロンからLayerNumber+1層目のDistinationNeuronNumber番目のニューロン間の重みにアクセスする．
+
+ LayerNumber はパーセプトロンの層数-1を最大値，最小値を1とする．
+ SourceNeuronNumber は LayerNumber層目のニューロン数を最大値，最小値を 1 とする．
+ DistinationNeuronNumber は LayerNumber+1層目のニューロン数を最大値，最小値を 1 とする．
+ */
+	SourceNeuronNumber--;
+	DistinationNeuronNumber--;
+	return m_Weight[LayerNumber - 1][DistinationNeuronNumber * LayerSize(LayerNumber) + SourceNeuronNumber];
+}
+
+// ネットワークのサイズ(層数)を返す
+unsigned int perceptron_parameter::NetworkSize() const {/*
+ ネットワークの層の数を返す
+ */
+	return m_NetworkForm.size();
+}
+// ある層のサイズ(ニューロン数)を返す
+unsigned int perceptron_parameter::LayerSize(unsigned int LayerNumber) const {/*
+ LayerNumber層目のニューロンの数を返す
+
+ LayerNumber はパーセプトロンの層数を最大値，最小値を 1 とする．
+ */
+	return m_NetworkForm[LayerNumber - 1];
+}
+
+// コンストラクタ
+perceptron_parameter::perceptron_parameter(std::vector<unsigned int> NetworkForm) {
+	m_NetworkForm = NetworkForm;
+
+	unsigned int Size = NetworkSize();
+
+	m_NeuronOutput.resize(Size);			// 0 <= size() <= NetworkSize()
+	m_NeuronValue.resize(Size - 1);			// 0 <= size() <= NetworkSize() - 1
+	m_Threshold.resize(Size - 1);	// 0 <= size() <= NetworkSize() - 1
+	m_Weight.resize(Size - 1);		// 0 <= size() <= NetworkSize() - 1
+
+	m_NeuronOutput[0].resize(LayerSize(1));							// 1層目のニューロンの数に合わせて調整
+	for (unsigned int i = 0; i < Size - 1; ++i)
+	{
+		m_NeuronOutput[i + 1].resize(LayerSize(i + 2));				// i+2層目のニューロンの数に合わせて調整
+		m_NeuronValue[i].resize(LayerSize(i + 2));					// i+2層目のニューロンの数に合わせて調整
+		m_Threshold[i].resize(LayerSize(i + 2));					// i+2層目のニューロンの数に合わせて調整
+		m_Weight[i].resize(LayerSize(i + 1) * LayerSize(i + 2));	// i+1層目とi+2層目のニューロンの数に合わせて調整
+	}
+}
+
+double sigmoid_function::activate(double value) {
+	return 1.0 / (1.0 + std::exp(-value));
+}
+double sigmoid_function::activate_differential(double value) {
+	double temp = activate(value);
+	return (1.0 - temp) * temp;
+}
+
+double softplus_function::activate(double value) {
+	return std::log(1.0 + std::exp(value));
+}
+double softplus_function::activate_differential(double value) {
+	double e_x = std::exp(value);
+	return e_x / (1.0 + e_x);
+}
+
+using namespace std;
+
+
+
+int add2(int a, int b) { return a + b; }
+int add4(int a, int b, int c, int d) { return a + b + c + d; }
+
+namespace detail {
+    template <class F, class Tuple, std::size_t... I>
+    constexpr decltype(auto) apply_impl(F&& f, Tuple&& t, std::index_sequence<I...>) {
+        return std::invoke(std::forward<F>(f), std::get<I>(std::forward<Tuple>(t))...);
+    }
+    template <class F, class Tuple>
+    constexpr decltype(auto) apply(F&& f, Tuple&& t) {
+        return detail::apply_impl(std::forward<F>(f), std::forward<Tuple>(t)
+                , std::make_index_sequence<std::tuple_size_v<std::remove_reference_t<Tuple>>>{ });
+    }
+
+    template <class F, class Tuple1, std::size_t... I, class Tuple2, std::size_t... J>
+    constexpr decltype(auto) apply_impl(F&& f, Tuple1&& t1, std::index_sequence<I...>, Tuple2&& t2, std::index_sequence<J...>) {
+        return std::invoke(std::forward<F>(f), std::get<I>(std::forward<Tuple1>(t1))..., std::get<J>(std::forward<Tuple2>(t2))...);
+    }
+    template <class F, class Tuple1, class Tuple2>
+    constexpr decltype(auto) apply(F&& f, Tuple1&& t1, Tuple2&& t2) {
+        return detail::apply_impl(std::forward<F>(f), std::forward<Tuple1>(t1)
+                , std::make_index_sequence<std::tuple_size_v<std::remove_reference_t<Tuple1>>>{ }
+                , std::forward<Tuple2>(t2)
+                , std::make_index_sequence<std::tuple_size_v<std::remove_reference_t<Tuple2>>>{ });
+    }
+}
+
+
+int main() {
+    //// 活性化関数を定義
+    //sigmoid_function sigmoid;	// シグモイド関数
+    //softplus_function softplus;	// ソフトプラス関数
+
+    //// ネットワークの形状と活性化関数を渡して，ネットワークを生成
+    //perceptron net({2, 3, 3, 1} , &softplus);
+
+    //// ネットワーク初期化オブジェクトを生成
+    //initializer init;
+
+    //// ネットワークの初期化
+    //init.initialize(net);
+
+    //// 出力値を表示
+    //std::cout << "0 0 , " << net({0.0, 0.0})[0] << std::endl;
+    //std::cout << "0 1 , " << net({0.0, 1.0})[0] << std::endl;
+    //std::cout << "1 0 , " << net({1.0, 0.0})[0] << std::endl;
+    //std::cout << "1 1 , " << net({1.0, 1.0})[0] << std::endl;
+
+    //// 学習装置と変化量オブジェクトを生成
+    //learning_device testament(0.5);
+    //std::vector<perceptron_parameter> hoge(4, perceptron_parameter({2, 3, 3, 1}));
+
+    //// 学習
+    //for (unsigned int i = 0; i < 4096; ++i)
+    //{
+    //    testament.calculate_difference(net , hoge[0] , {0.0, 0.0} , {0.0});
+    //    testament.calculate_difference(net , hoge[1] , {0.0, 1.0} , {1.0});
+    //    testament.calculate_difference(net , hoge[2] , {1.0, 0.0} , {1.0});
+    //    testament.calculate_difference(net , hoge[3] , {1.0, 1.0} , {0.0});
+
+    //    testament.learn(net , hoge[0]);
+    //    testament.learn(net , hoge[1]);
+    //    testament.learn(net , hoge[2]);
+    //    testament.learn(net , hoge[3]);
+    //}
+
+    //// 出力値を表示
+    //std::cout << "0 0 , " << net({0.0, 0.0})[0] << std::endl;
+    //std::cout << "0 1 , " << net({0.0, 1.0})[0] << std::endl;
+    //std::cout << "1 0 , " << net({1.0, 0.0})[0] << std::endl;
+    //std::cout << "1 1 , " << net({1.0, 1.0})[0] << std::endl;
+    //std::cout << "error :  " <<
+    //    (pow((net({0.0, 0.0})[0] - 1.0), 2)
+    //    + pow((net({1.0, 0.0})[0] - 0.0), 2)
+    //    + pow((net({0.0, 1.0})[0] - 0.0), 2)
+    //    + pow((net({1.0, 1.0})[0] - 1.0), 2))
+    //    * 0.5
+    //    << std::endl;
+
+    tensor<double> a(1, 2);
+
+    a(0, 1) = 0.0;
+    std::cout << a(0, 1) << std::endl;
+
+
+    return 0;
+}
+
