@@ -1,148 +1,140 @@
 #ifndef IG_TENSOR_HPP
 #define IG_TENSOR_HPP
 
+#include <iostream>
+#include <vector>
+#include <cmath>
 #include <array>
-#include <initializer_list>
+#include <memory>
+#include <random>
 
-template <typename T, template <typename...> class U, std::size_t N> 
-struct type_nesting { using type = U<typename type_nesting<T, U, N-1>::type>; };
-template <typename T, template <typename...> class U>
-struct type_nesting<T, U, 0> { using type = T; };
-
-template <template <std::size_t... Ms> typename T, std::size_t S, std::size_t... Ns>
-struct split_indices;
-
-// 添字クラス
-template <std::size_t... Ns>
-class indices {
-    static inline constexpr std::size_t Rank = sizeof...(Ns);
-    static inline constexpr std::size_t Dim[sizeof...(Ns)] = { Ns... };
-    static inline constexpr std::size_t Order = (Ns + ... + 0);
-    static inline constexpr std::size_t Size = (Ns * ... * 1);
-
-    std::array<std::size_t, sizeof...(Ns)> ind;
-
-public:
-    // コンストラクタ
-    indices() { for (int i = 0; i < Rank; i++) ind[i] = 0; }
-    template <class... T>
-    indices(T... Ms) : ind{Ms...} { }
-    indices(std::initializer_list<std::size_t> x) : ind(x) { }
-    indices(const indices<Ns...> &x) { for (std::size_t i = 0; i < Rank; i++) ind[i] = x.ind[i]; }
-
-    // 代入
-    const indices<Ns...> &operator=(std::initializer_list<std::size_t> x) { ind = x; return *this; }
-    const indices<Ns...> &operator=(const indices<Ns...> &x) {
-        for (std::size_t i = 0; i < Rank; i++) ind[i] = x.ind[i]; return *this; }
-
-    bool next() {
-        for (int i = Rank - 1; i >= 0; i--) {
-            ind[i]++;
-            if (ind[i] >= Dim[i]) ind[i] = 0;
-            else return true;
-        }
-        return false;
-    }
-
-    std::size_t &operator [] (std::size_t i) { return ind[i]; }
-    const std::size_t operator [] (std::size_t i) const { return ind[i]; }
-
-};
-
-template <class T, std::size_t... Ns>
-class tensor;
-
-template <typename T, typename... Us>
-struct indices_checker;
-template <typename T, std::size_t N, std::size_t... Ns, typename U, typename... Us>
-struct indices_checker<tensor<T, N, Ns...>, U, Us...> {
-    template <typename TEMP, std::enable_if_t<std::is_integral<U>::value, std::nullptr_t> = nullptr>
-    static constexpr bool result(TEMP) {
-        return indices_checker<tensor<T, Ns...>, Us...>::result(true);
-    }
-};
-
-// テンソルクラス
-template <class T, std::size_t... Ns>
+// tensor
+template <class T>
 class tensor {
-    using type = T;
-    using this_tensor = tensor<T, Ns...>;
-    using i_type = std::size_t;
-    static inline constexpr i_type Rank = sizeof...(Ns);
-    static inline constexpr i_type Dim[sizeof...(Ns)] = { Ns... };
-    static inline constexpr i_type Order = (Ns + ... + 0);
-    static inline constexpr i_type Size = (Ns * ... * 1);
+    std::vector<std::size_t> dim_; // 各添字の次元
+    std::size_t size_;             // dim[0] * ... * 1
+    std::size_t order_;            // dim[0] + ... + 0
+    std::vector<T> v;
 
-    std::array<T, Size> t;
-
+    // 添字変換
     template <class I, class... Is>
-    i_type getIndex(i_type r, I i, Is... is) const { return i + Dim[r] * getIndex<Is...>(r+1, is...); }
+    std::size_t _getIndex(std::size_t r, I i, Is... is) const { return i + dim(r) * _getIndex<Is...>(r+1, is...); }
     template <class I, class... Is>
-    i_type getIndex(i_type r, I i) const { return i; }
-
+    std::size_t _getIndex(std::size_t r, I i) const { return i; }
     template <class... Is>
-    void init(T x, Is... is) { (*this)(is...) = x; }
-    template <class U, class... Is>
-    void init(U x, Is... is) { i_type i = 0; for (auto &&e : x) init(e, is..., i), i++; }
+    std::size_t getIndex(Is... is) const { return _getIndex(0, is...); }
 
 public:
-    // コンストラクタ
+    // 添字
+    class indices {
+        friend tensor<T>;
+
+        std::vector<std::size_t> dim_;
+        std::size_t size_;
+        std::size_t order_;
+
+        std::vector<std::size_t> ind;
+
+        template <class I, class... Is>
+        void ind_set(std::size_t r, I i, Is... is) {
+            if (r < ind.size()) {
+                ind[r] = i;
+                ind_set(r+1, is...);
+            }
+        }
+
+    public:
+        template <class... Is>
+        indices(const tensor<T> &par, Is... is) : ind(par.rank()), dim_(par.dim_), size_(par.size_), order_(par.order_) {
+            if constexpr (sizeof...(Is) != 0) ind_set(0, is...);
+            else for (int i = 0; i < ind.size(); i++) ind[i] = 0;
+        }
+
+        void next() {
+            int i = 0;
+            while (true) {
+                ind[i]++;
+                if (ind[i] < dim_[i]) break;
+
+                ind[i] = 0;
+                i++;
+                if (i >= dim_.size()) break;
+            }
+        }
+        void prev() {
+            int i = 0;
+            while (true) {
+                ind[i]--;
+                if (ind[i] >= 0) break;
+
+                ind[i] = dim_[i] - 1;
+                i++;
+                if (i >= dim_.size()) break;
+            }
+        }
+        std::size_t &index(std::size_t i) { return ind[i]; }
+        std::size_t index(std::size_t i) const { return ind[i]; }
+        std::size_t getIndex() const {
+            std::size_t i = ind[rank()-1];
+            for (int r = 1; r < rank(); r++)
+                i = ind[rank()-1-r] + dim(rank()-1-r) * i;
+            return i;
+        }
+
+        std::size_t dim(std::size_t i) const { return dim_[i]; }
+        std::size_t rank() const { return dim_.size(); }
+        std::size_t size() const { return size_; }
+        std::size_t oder() const { return order_; }
+    };
+
     tensor() { }
-    tensor(typename type_nesting<T, std::initializer_list, Rank>::type x) { init(x); }
-    tensor(const tensor<T, Ns...> &x) { for (i_type i = 0; i < Size; i++) t[i] = x.t[i]; }
+    template <class U>
+    tensor(std::vector<U> il) {
+        dim_.resize(il.size());
+        int i = 0;
+        for (auto itr = il.begin(); itr != il.end(); itr++) {
+            dim_[i] = static_cast<std::size_t>(*itr);
+            i++;
+        }
 
-    // 代入
-    const this_tensor &operator=(typename type_nesting<T, std::initializer_list, Rank>::type x) { init(x); return *this; }
-    const this_tensor &operator=(const tensor<T, Ns...> &x) { for (i_type i = 0; i < Size; i++) t[i] = x.t[i]; return *this; }
+        size_ = 1;
+        order_ = 0;
+        for (int i = 0; i < dim_.size(); i++) { size_ *= dim_[i]; order_ += dim_[i]; }
 
-    indices<Ns...> begin() const { return indices<Ns...>(); }
+        v.resize(size_);
+    }
+    template <class U, std::enable_if_t<std::is_integral<U>::value, int> = 0>
+    tensor(std::initializer_list<U> il) {
+        dim_.resize(il.size());
+        int i = 0;
+        for (auto itr = il.begin(); itr != il.end(); itr++) {
+            dim_[i] = static_cast<std::size_t>(*itr);
+            i++;
+        }
 
-    // 次元や添字の情報等を得る関数
-    constexpr i_type dimension(i_type i) const { return i < Rank ? Dim[i] : 0; }
-    constexpr i_type rank() const { return Rank; }
-    constexpr i_type order() const { return Order; }
-    constexpr i_type size() const { return Size; }
+        size_ = 1;
+        order_ = 0;
+        for (int i = 0; i < dim_.size(); i++) { size_ *= dim_[i]; order_ += dim_[i]; }
 
-    // 添字による要素へのアクセス用関数
-    T &operator () (const indices<Ns...> &i) {
-        i_type j = i[Rank - 1];
-        for (int r = Rank - 2; r >= 0; r--) j = j * Dim[r] + i[r];
-        return t[j];
+        v.resize(size_);
     }
-    const T &operator () (const indices<Ns...> &i) const {
-        i_type j = i[Rank - 1];
-        for (int r = Rank - 2; r > 0; r--) j = j * Dim[r] + i[r];
-        return t[j];
-    }
-    template <i_type... M1s, i_type... M2s>
-    T &operator () (const indices<M1s...> &i1, const indices<M1s...> &i2) {
-        static_assert(Rank == sizeof...(M1s) + sizeof...(M2s), "");
-        i_type j = i2[sizeof...(M2s) - 1];
-        for (int r = sizeof...(M2s) - 2; r >= 0; r--) j = j * Dim[sizeof...(M1s) + r] + i2[r];
-        for (int r = sizeof...(M1s) - 1; r >= 0; r--) j = j * Dim[r] + i2[r];
-        return t[j];
-    }
-    template <i_type... M1s, i_type... M2s>
-    const T &operator () (const indices<M1s...> &i1, const indices<M1s...> &i2) const {
-        static_assert(Rank == sizeof...(M1s) + sizeof...(M2s), "");
-        i_type j = i2[sizeof...(M2s) - 1];
-        for (int r = sizeof...(M2s) - 2; r >= 0; r--) j = j * Dim[sizeof...(M1s) + r] + i2[r];
-        for (int r = sizeof...(M1s) - 1; r >= 0; r--) j = j * Dim[r] + i2[r];
-        return t[j];
-    }
-    template <class... Is, typename std::enable_if<sizeof...(Is) == sizeof...(Ns)>::type * = nullptr>
-    T &operator () (Is... is) {
-        return t[getIndex<Is...>(0, is...)];
-    }
-    template <class... Is, typename std::enable_if<sizeof...(Is) == sizeof...(Ns)>::type * = nullptr>
-    const T &operator () (Is... is) const {
-        return t[getIndex<Is...>(0, is...)];
-    }
-    template <class... Is, typename std::enable_if<sizeof...(Is) == sizeof...(Ns)>::type * = nullptr>
-    T operator () (Is... is) const&& {
-        return t[getIndex<Is...>(0, is...)];
-    }
+    // 添字生成
+    indices begin() const { return indices(*this); }
+    // アクセス
+    template <class... Is>
+          T &operator () (Is... is)            { return v[getIndex<Is...>(is...)]; }
+    template <class... Is>
+    const T &operator () (Is... is)    const   { return v[getIndex<Is...>(is...)]; }
+    template <class... Is>
+          T  operator () (Is... is)    const&& { return v[getIndex<Is...>(is...)]; }
+          T &at(indices ind)         { return v[ind.getIndex()]; }
+    const T &at(indices ind) const   { return v[ind.getIndex()]; }
+          //T  at(indices ind) const&& { return v[ind.getIndex()]; }
 
+    std::size_t dim(std::size_t i) const { return dim_[i]; }
+    std::size_t rank() const { return dim_.size(); }
+    std::size_t size() const { return size_; }
+    std::size_t oder() const { return order_; }
 };
 
 #endif
