@@ -12,23 +12,19 @@ public:
         T e = 0;
         T c = 0;
         T y, u;
-        auto ind = x.begin();
-        for (auto i = 0; i < x.size(); i++) {
+        for (auto ind = x.begin(); ind != x.end(); ind.next()) {
             y = std::pow(x.at(ind) - t.at(ind), 2) - c;
             u = e + y;
             c = (u - e) - y;
             e = u;
-            ind.next();
         }
         return e;
     }
 private:
     tensor<T> d_mse(const tensor<T> x, const tensor<T> t) {
         tensor<T> dx = x;
-        auto ind = x.begin();
-        for (int i = 0; i < x.size(); i++) {
+        for (auto ind = x.begin(); ind != x.end(); ind.next()) {
             dx.at(ind) -= t.at(ind);
-            ind.next();
         }
         return dx;
     }
@@ -44,12 +40,8 @@ public:
         std::uniform_real_distribution<> dist(a, b);
 
         for (int l = 0; l < net.layer_size(); l++) {
-            //int l_ = net.layer_size() - 1 - l;
-            int l_ = l;
-            auto ind = net.parameter(l_).begin();
-            for (int i = 0; i < net.parameter(l_).size(); i++) {
-                net.parameter(l_).at(ind) = dist(engine);
-                ind.next();
+            for (auto ind = net.parameter(l).begin(); ind != net.parameter(l).end(); ind.next()) {
+                net.parameter(l).at(ind) = dist(engine);
             }
         }
     }
@@ -85,19 +77,15 @@ public:
         for (int i = 1; i < xs.size(); i++) {
             ws_ = backpropagate(net, xs[i], ts[i]);
             for (int l = 0; l < ws_.size(); l++) {
-                auto ind = ws[l].begin();
-                for (int j = 0; j < ws[l].size(); j++) {
+                for (auto ind = ws[l].begin(); ind != ws[l].end(); ind.next()) {
                     ws[l].at(ind) += ws_[l].at(ind);
-                    ind.next();
                 }
             }
         }
 
         for (int l = 0; l < ws.size(); l++) {
-            auto ind = ws[l].begin();
-            for (int j = 0; j < ws[l].size(); j++) {
+            for (auto ind = ws[l].begin(); ind != ws[l].end(); ind.next()) {
                 net.parameter(l).at(ind) = net.parameter(l).at(ind) - eta * ws[l].at(ind);
-                ind.next();
             }
         }
     }

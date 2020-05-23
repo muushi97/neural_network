@@ -13,19 +13,19 @@
 // layer
 template <class T>
 class base_layer {
-    std::vector<int> input_size;
-    std::vector<int> output_size;
+    std::vector<std::size_t> input_size;
+    std::vector<std::size_t> output_size;
 
 public:
-    const int &inputSize(int i) const { return input_size[i]; }
-    const std::vector<int> &inputSize() const { return input_size; }
-    const int inputRank() const { return input_size.size(); }
-    const int &outputSize(int i) const { return output_size[i]; }
-    const std::vector<int> &outputSize() const { return output_size; }
-    const int outputRank() const { return output_size.size(); }
+    const std::size_t inputSize(std::size_t i) const { return input_size[i]; }
+    const std::vector<std::size_t> &inputSize() const { return input_size; }
+    const std::size_t inputRank() const { return input_size.size(); }
+    const std::size_t outputSize(std::size_t i) const { return output_size[i]; }
+    const std::vector<std::size_t> &outputSize() const { return output_size; }
+    const std::size_t outputRank() const { return output_size.size(); }
 
     // コンストラクタ
-    base_layer(std::vector<int> is, std::vector<int> os) : input_size(is), output_size(os) { }
+    base_layer(std::initializer_list<std::size_t> is, std::initializer_list<std::size_t> os) : input_size(is), output_size(os) { }
 
     // 順伝播 : 前の層の入力を受け、次の層への入力を計算
     virtual tensor<T> propagate(const tensor<T> x) const = 0;
@@ -47,7 +47,7 @@ class fully_connected_layer : public base_layer<T> {
 
 public:
     // コンストラクタ
-    fully_connected_layer(int is, int os) : base_layer<T>{{is}, {os}}, weight{is+1, os} { }
+    fully_connected_layer(std::size_t is, std::size_t os) : base_layer<T>{{is}, {os}}, weight{is+1, os} { }
 
     // 順伝播 : 前の層の入力を受け、次の層への入力を計算
     virtual tensor<T> propagate(const tensor<T> x) const {
@@ -99,7 +99,7 @@ class sigmoid_layer : public base_layer<T> {
 
 public:
     // コンストラクタ
-    sigmoid_layer(int s) : base_layer<T>({s}, {s}), alpha({s}) { }
+    sigmoid_layer(std::size_t s) : base_layer<T>({s}, {s}), alpha({s}) { }
 
     // 順伝播 : 前の層の入力を受け、次の層への入力を計算
     virtual tensor<T> propagate(const tensor<T> x) const {
@@ -142,7 +142,7 @@ class ReLU_layer : public base_layer<T> {
 
 public:
     // コンストラクタ
-    ReLU_layer(int s) : base_layer<T>({s}, {s}), alpha({s}) { }
+    ReLU_layer(std::size_t s) : base_layer<T>({s}, {s}), alpha({s}) { }
 
     // 順伝播 : 前の層の入力を受け、次の層への入力を計算
     virtual tensor<T> propagate(const tensor<T> x) const {

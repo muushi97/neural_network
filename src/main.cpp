@@ -7,7 +7,6 @@
 
 #include "trainer.hpp"
 
-
 using namespace std;
 
 int main() {
