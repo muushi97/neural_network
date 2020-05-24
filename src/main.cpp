@@ -6,6 +6,7 @@
 #include <random>
 
 #include "trainer.hpp"
+#include "loader.hpp"
 
 using namespace std;
 
@@ -18,6 +19,39 @@ int main() {
                             };
 
     tensor<double> temp1{2}, temp2{1};
+
+    std::unique_ptr<loader<double>> ldr(new mnist_loader<double>( "../../dataset/mnist/train-images.idx3-ubyte"
+                                                                , "../../dataset/mnist/train-labels.idx1-ubyte"
+                                                                , "../../dataset/mnist/t10k-images.idx3-ubyte"
+                                                                , "../../dataset/mnist/t10k-labels.idx1-ubyte"
+                                                                , 0.0, 1.0, 0.0, 0.0, 1));
+
+    {
+        int i = 0;
+        do {
+            std::cout << "train size : " << ldr->train_size() << std::endl;
+            std::cout << "test size : " << ldr->test_size() << std::endl;
+            std::cout << "valid size : " << ldr->valid_size() << std::endl;
+            std::cin >> i;
+            if (i < 0) break;
+
+            tensor<double> d = ldr->get_valid_data(i);
+            tensor<double> l = ldr->get_valid_label(i);
+
+            for (int y = 0; y < 28; y++) {
+                for (int x = 0; x < 28; x++) {
+                    std::cout << (d(x + 28 * y) < 0.5 ? "00" : "11");
+                    if (d(x + 28 * y) < 0 || d(x + 28 * y) > 1.0) std::cout << std::endl << "error" << std::endl;
+                }
+                std::cout << std::endl;
+            }
+            std::cout << "label : ";
+            for (int i = 0; i < l.dim(0); i++) {
+                std::cout << (l(i) < 0.5 ? 0 : 1) << ", ";
+            }
+            std::cout << std::endl << std::endl;
+        } while(i >= 0);
+    }
 
     // train data
     std::vector<tensor<double>> xs, ts;
