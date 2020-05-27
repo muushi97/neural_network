@@ -75,6 +75,7 @@ public:
         std::vector<tensor<T>> ws = backpropagate(net, xs[0], ts[0]);
         std::vector<tensor<T>> ws_;
         for (int i = 1; i < xs.size(); i++) {
+            //if (i % 1 == 0) std::cout << "t:step : " << i << std::endl;
             ws_ = backpropagate(net, xs[i], ts[i]);
             for (int l = 0; l < ws_.size(); l++) {
                 for (auto ind = ws[l].begin(); ind != ws[l].end(); ind.next()) {
