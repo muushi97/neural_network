@@ -6,26 +6,43 @@
 #include "tensor.hpp"
 
 class GPR {
-    double sigma;                   // ノイズの標準偏差
+public:
+    enum kernel_type { se   // squared exponential kernel
+                     , m52  // ARD Matern 5/2 kernel
+    };
+
+private:
+    double sigma2;                 // ノイズの標準偏差
     std::vector<tensor<double>> X;  // 教師データの入力(行列)
     std::vector<double> y;          // 教師データの出力(ベクトル)
-    // カーネル
+    kernel_type type;               // カーネル
     tensor<double> K;               // カーネルと教師データから得られる行列に標準偏差を足した行列
 
     double kernel(const tensor<double> &x1, const tensor<double> &x2) {
-        double s = 0.0;
-        for (int i = 0; i < x1.dim(0); i++)
-            s += std::pow(x1(i) - x2(i), 2);
-        return 1.0 * std::exp(-0.5 * s);
+        if (type == se) {
+            double s = 0.0;
+            for (int i = 0; i < x1.dim(0); i++)
+                s += std::pow(x1(i) - x2(i), 2);
+            return 1.0 * std::exp(-0.5 * s);
+        }
+        else if (type == m52) {
+            double s = 0.0;
+            for (int i = 0; i < x1.dim(0); i++)
+                s += std::pow(x1(i) - x2(i), 2);
+            double s_ = 5.0 * std::sqrt(s);
+            //std::cout << "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa : " << 1.0 * (1.0 + s_ + 5.0 / 3.0 * s) * std::exp(-1.0 * s) << std::endl;
+            return 1.0 * (1.0 + s_ + 5.0 / 3.0 * s) * std::exp(-1.0 * s_);
+        }
+        else return 0.0;
     }
 
     void calc_K() {
         K = tensor<double>{ X.size(), X.size() };
-        double sig_2 = sigma * sigma;
+        double sig2 = sigma2;
 
         for (int i = 0; i < X.size(); i++)
             for (int j = 0; j < X.size(); j++)
-                K(i, j) = kernel(X[i], X[j]) + (i == j ? sig_2 : 0.0);
+                K(i, j) = kernel(X[i], X[j]) + (i == j ? sig2 : 0.0);
     }
     std::vector<double> calc_k_ast_vec(const tensor<double> &x_ast) {
         std::vector<double> k_ast(X.size());
@@ -92,7 +109,7 @@ public:
             std::cout << x[i] << ",\n"[i==x.size()-1];
     }
 
-    GPR(double sig) : sigma(sig) { }
+    GPR(double sig2, kernel_type t) : sigma2(sig2), type(t) { }
 
     // 教師データを追加
     void add_train_data(const tensor<double> &x, double y_) {
@@ -116,10 +133,13 @@ public:
 
         double e = 0.0;
         double v = kernel(x, x);
+        //std::cout << "aaaaaaaaa : " << e << ", " << v << std::endl;
         for (int i = 0; i < X.size(); i++) {
             e += temp[i] * y[i];
             v -= temp[i] * k_ast[i];
+            //std::cout << "  bbbbbbbbb : " << temp[i] << ", " << y[i] << ", " << k_ast[i] << " ==>> " << e << ", " << v << std::endl;
         }
+        //std::cout << "  ccccccccc : " << e << ", " << v << std::endl;
         return { e, v };
     }
 };

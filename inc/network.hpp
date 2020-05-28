@@ -28,6 +28,10 @@ public:
         for (auto itr = il.begin(); itr != il.end(); itr++)
             ls.emplace_back(*itr);
     }
+    network(std::vector<layer<T>*> il) {
+        for (auto itr = il.begin(); itr != il.end(); itr++)
+            ls.emplace_back(*itr);
+    }
 
     // 順伝播
     tensor<T> propagate(int i, const tensor<T> x) { return ls[i]->propagate(x); }
