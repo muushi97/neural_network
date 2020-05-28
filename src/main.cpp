@@ -4,6 +4,7 @@
 #include <array>
 #include <memory>
 #include <random>
+#include <iomanip>
 
 #include "trainer.hpp"
 #include "loader.hpp"
@@ -65,99 +66,6 @@ void test_xor() {
     std::cout << y(0) << std::endl;
 }
 
-void test_mnist() {
-    std::unique_ptr<loader<double>> ldr(new mnist_loader<double>( "../../dataset/mnist/train-images.idx3-ubyte"
-                                                                , "../../dataset/mnist/train-labels.idx1-ubyte"
-                                                                , "../../dataset/mnist/t10k-images.idx3-ubyte"
-                                                                , "../../dataset/mnist/t10k-labels.idx1-ubyte"
-                                                                , 0.1, 0.9, 1.0 / 6.0, 0.0, 1));
-
-    int batch_size = 128 * 2;
-    std::size_t N = 500;
-    //double eta = 0.005;
-    double eta = 0.007;
-    int print_step = 20;
-
-    // train data
-    std::vector<tensor<double>> xs(batch_size), ts(batch_size);
-
-    // network
-    network<double>      net{ new fully_connected_layer<double>(784, 30)
-                            , new sigmoid_layer<double>(30)
-                            , new fully_connected_layer<double>(30, 10)
-                            //, new sigmoid_layer<double>(392)
-                            //, new fully_connected_layer<double>(392, 10)
-                            , new sigmoid_layer<double>(10)
-                            };
-
-
-    trainer<double> tr;
-
-    // initialize
-    tr.set_parameter_by_uniform_distribution(net, -0.4, 0.4);
-
-    // train
-    std::random_device seed_gen;
-    std::mt19937_64 engine(seed_gen());
-    std::uniform_int_distribution<> dist_train(0, ldr->train_size()-1);
-    std::uniform_int_distribution<> dist_valid(0, ldr->valid_size()-1);
-    for (int i = 0; i < N; i++) {
-        if (i % print_step == 0) std::cout << "m.step : " << i;
-
-        for (int j = 0; j < batch_size; j++) {
-            int k = dist_train(engine);
-            xs[j] = ldr->get_train_data(k);
-            ts[j] = ldr->get_train_label(k);
-        }
-
-        tr.parameter_update(net, eta, xs, ts);
-
-        if (i % print_step == 0) {
-            double e = 0.0;
-            std::size_t counter = 0;
-            for (int j = 0; j < ldr->valid_size(); j++) {
-                tensor<double> y = net.propagate(ldr->get_valid_data(j));
-                tensor<double> z = ldr->get_valid_label(j);
-                e += tr.mse(y, z);
-                counter += max_1rand_tensor(y) == max_1rand_tensor(z) ? 1 : 0;
-            }
-            std::cout << ",  error : " << e;
-            std::cout << ",  acuracy : " << static_cast<double>(counter) / static_cast<double>(ldr->valid_size()) << std::endl;
-        }
-    }
-
-    // result
-    xs.clear(); ts.clear();
-    xs.resize(ldr->test_size()), ts.resize(ldr->test_size());
-    for (int i = 0; i < ldr->test_size(); i++) {
-        xs[i] = ldr->get_test_data(i);
-        ts[i] = ldr->get_test_label(i);
-    }
-    {
-        double e = 0.0;
-        std::size_t counter = 0;
-        for (int j = 0; j < ldr->test_size(); j++) {
-            tensor<double> y = net.propagate(xs[j]);
-            e += tr.mse(y, ts[j]);
-            counter += max_1rand_tensor(y) == max_1rand_tensor(ts[j]) ? 1 : 0;
-        }
-        std::cout << "test acuracy : " << static_cast<double>(counter) / static_cast<double>(ldr->test_size()) << std::endl;
-    }
-    int i = 0;
-    tensor<double> y;
-    do {
-        std::cout << ">> ";
-        std::cin >> i;
-        if (i < 0) break;
-        y = net.propagate(xs[i]);
-        for (int j = 0; j < y.dim(0); j++) {
-            std::cout << j << " : " << std::round(y(j) * 100) << "(" << std::round(ts[i](j) * 100) << ")" << std::endl;
-        }
-        if (max_1rand_tensor(y) == max_1rand_tensor(ts[i])) std::cout << "correct" << std::endl;
-        else                                                std::cout << "not correct" << std::endl;
-        std::cout << std::endl;
-    } while(true);
-}
 
 void GPR_test() {
     std::random_device seed_gen;
@@ -198,7 +106,8 @@ void GPR_test() {
     }
 }
 
-int expe(int argc, char *argv[]) {
+
+int expe1(int argc, char *argv[]) {
     double eta = 0.007;
     std::size_t batch_size = 128 * 2;
     std::size_t N = 500;
@@ -214,11 +123,15 @@ int expe(int argc, char *argv[]) {
                             , new sigmoid_layer<double>(10)
                             };
     std::size_t h = 20;
-    std::string prename = "test-";
+    std::string prename = "test";
+    std::string postname = "test";
+    std::string args = "";
+    for (int i = 0; i < argc; i++)
+        args += std::string(argv[i]) + (i < argc-1 ? " " : "");
 
     // initialize-1
     {
-        for (int i = 1; i < argc; i++) {
+        for (int i = 2; i < argc; i++) {
             std::string arg = argv[i];
             if (arg == "-lr") { // learning rate
                 eta = std::stod(std::string(argv[i+1])); i++;
@@ -250,14 +163,14 @@ int expe(int argc, char *argv[]) {
                 model.resize(2 * (LN-1) + 1);
                 model[0] = std::string(argv[i+1]); i++;
                 p = std::stoi(model[0]);
-                for (int i = 1; i < LN; i++) {
-                    model[2*(i-1) + 1] = std::string(argv[i+1]); i++;
-                    if (model[2*(i-1) + 1] == "sigm" || model[2*(i-1) + 1] == "relu") {
-                        model[2*(i-1) + 2] = std::string(argv[i+1]); i++;
-                        n = std::stoi(model[2*(i-1) + 2]);
-                        il[2*(i-1)    ] = new fully_connected_layer<double>(p, n);
-                        if (model[2*(i-1) + 1] == "sigm") il[2*(i-1) + 1] = new sigmoid_layer<double>(n);
-                        else                              il[2*(i-1) + 1] = new ReLU_layer<double>(n);
+                for (int j = 1; j < LN; j++) {
+                    model[2*(j-1) + 1] = std::string(argv[i+1]); i++;
+                    if (model[2*(j-1) + 1] == "sigm" || model[2*(j-1) + 1] == "relu") {
+                        model[2*(j-1) + 2] = std::string(argv[i+1]); i++;
+                        n = std::stoi(model[2*(j-1) + 2]);
+                        il[2*(j-1)    ] = new fully_connected_layer<double>(p, n);
+                        if (model[2*(j-1) + 1] == "sigm") il[2*(j-1) + 1] = new sigmoid_layer<double>(n);
+                        else                              il[2*(j-1) + 1] = new ReLU_layer<double>(n);
                         p = n;
                     }
                     else return -1;
@@ -275,11 +188,13 @@ int expe(int argc, char *argv[]) {
                 h = std::stoi(std::string(argv[i+1])); i++;
             }
             else if (arg == "-o") { // 出力ファイル接頭辞
-                prename = std::stod(std::string(argv[i+1])); i++;
+                prename = std::string(argv[i+1]); i++;
+                postname = std::string(argv[i+1]); i++;
             }
             else return -1;
         }
 
+        std::cerr << "command line arguments : " << args << std::endl;
         std::cerr << "learning rate : " << eta << std::endl;
         std::cerr << "batch size : " << batch_size << std::endl;
         std::cerr << "N : " << N << std::endl;
@@ -294,6 +209,7 @@ int expe(int argc, char *argv[]) {
             std::cerr << "weight -> uniform distribution : mean=" << weight_normal_mean << ", var=" << weight_normal_variance << std::endl;
         std::cerr << "step size : " << h << std::endl;
         std::cerr << "out put file name prefix : \"" << prename << "\"" << std::endl;
+        std::cerr << "out put file name postfix : \"" << postname << "\"" << std::endl;
     }
 
 
@@ -309,6 +225,21 @@ int expe(int argc, char *argv[]) {
         tr.set_parameter_by_uniform_distribution(net, weight_uniform_left, weight_uniform_right);
     else
         tr.set_parameter_by_uniform_distribution(net, weight_normal_mean, weight_normal_variance);
+    // エポックに応じた accuracy の履歴
+    std::ofstream train_accuracy(prename + "-train-accuracy-" + postname + ".csv");
+    std::ofstream valid_accuracy(prename + "-valid-accuracy-" + postname + ".csv");
+    std::ofstream test_accuracy(prename + "-test-accuracy-" + postname + ".csv");
+    // エポックに応じた error の履歴
+    std::ofstream train_error(prename + "-train-error-" + postname + ".csv");
+    std::ofstream valid_error(prename + "-valid-error-" + postname + ".csv");
+    std::ofstream test_error(prename + "-test-error-" + postname + ".csv");
+    // 書式
+    train_accuracy << std::fixed << std::setprecision(10) << std::endl;
+    train_error    << std::fixed << std::setprecision(10) << std::endl;
+    valid_accuracy << std::fixed << std::setprecision(10) << std::endl;
+    valid_error    << std::fixed << std::setprecision(10) << std::endl;
+    test_accuracy  << std::fixed << std::setprecision(10) << std::endl;
+    test_error     << std::fixed << std::setprecision(10) << std::endl;
 
 
     // train
@@ -316,28 +247,61 @@ int expe(int argc, char *argv[]) {
     std::mt19937_64 engine(seed_gen());
     std::uniform_int_distribution<> dist_train(0, ldr->train_size()-1);
     std::uniform_int_distribution<> dist_valid(0, ldr->valid_size()-1);
-    for (int i = 0; i < N; i++) {
+    for (int i = 0; i <= N; i++) {
         if (i % h == 0) std::cerr << "m.step : " << i;
 
-        for (int j = 0; j < batch_size; j++) {
-            int k = dist_train(engine);
-            xs[j] = ldr->get_train_data(k);
-            ts[j] = ldr->get_train_label(k);
+        if (i != 0) {
+            for (int j = 0; j < batch_size; j++) {
+                int k = dist_train(engine);
+                xs[j] = ldr->get_train_data(k);
+                ts[j] = ldr->get_train_label(k);
+            }
+            tr.parameter_update(net, eta, xs, ts);
         }
 
-        tr.parameter_update(net, eta, xs, ts);
-
         if (i % h == 0) {
-            double e = 0.0;
-            std::size_t counter = 0;
+            std::size_t counter;
+            double tr_acc, v_acc, te_acc;
+            double tr_e, v_e, te_e;
+
+            tr_e = 0.0;
+            counter = 0;
+            for (int j = 0; j < ldr->train_size(); j++) {
+                tensor<double> y = net.propagate(ldr->get_train_data(j));
+                tensor<double> z = ldr->get_train_label(j);
+                tr_e += tr.mse(y, z);
+                counter += max_1rand_tensor(y) == max_1rand_tensor(z) ? 1 : 0;
+            }
+            tr_acc = static_cast<double>(counter) / static_cast<double>(ldr->train_size());
+
+            v_e = 0.0;
+            counter = 0;
             for (int j = 0; j < ldr->valid_size(); j++) {
                 tensor<double> y = net.propagate(ldr->get_valid_data(j));
                 tensor<double> z = ldr->get_valid_label(j);
-                e += tr.mse(y, z);
+                v_e += tr.mse(y, z);
                 counter += max_1rand_tensor(y) == max_1rand_tensor(z) ? 1 : 0;
             }
-            std::cerr << ",  error : " << e;
-            std::cerr << ",  acuracy : " << static_cast<double>(counter) / static_cast<double>(ldr->valid_size()) << std::endl;
+            v_acc = static_cast<double>(counter) / static_cast<double>(ldr->valid_size());
+
+            te_e = 0.0;
+            counter = 0;
+            for (int j = 0; j < ldr->test_size(); j++) {
+                tensor<double> y = net.propagate(ldr->get_test_data(j));
+                tensor<double> z = ldr->get_test_label(j);
+                te_e += tr.mse(y, z);
+                counter += max_1rand_tensor(y) == max_1rand_tensor(z) ? 1 : 0;
+            }
+            te_acc = static_cast<double>(counter) / static_cast<double>(ldr->test_size());
+
+            std::cerr << ",  error(train, valid, test) : " << tr_e << ", " << v_e << ", " << te_e;
+            std::cerr << ",  accuracy(train, valid, test) : " << tr_acc << ", " << v_acc << ", " << te_acc << std::endl;
+            train_accuracy << i << " " << tr_acc << std::endl;
+            train_error    << i << " " << tr_e   << std::endl;
+            valid_accuracy << i << " " <<  v_acc << std::endl;
+            valid_error    << i << " " <<  v_e   << std::endl;
+            test_accuracy  << i << " " << te_acc << std::endl;
+            test_error     << i << " " << te_e   << std::endl;
         }
     }
 
@@ -357,7 +321,7 @@ int expe(int argc, char *argv[]) {
             e += tr.mse(y, ts[j]);
             counter += max_1rand_tensor(y) == max_1rand_tensor(ts[j]) ? 1 : 0;
         }
-        std::cerr << "test acuracy : " << static_cast<double>(counter) / static_cast<double>(ldr->test_size()) << std::endl;
+        std::cerr << "test accuracy : " << static_cast<double>(counter) / static_cast<double>(ldr->test_size()) << std::endl;
     }
     //int i = 0;
     //tensor<double> y;
@@ -378,12 +342,17 @@ int expe(int argc, char *argv[]) {
     return 0;
 }
 
-int main(int argc, char *argv[]) {
-    //test_xor();
-    //test_mnist();
-    //GPR_test();
 
-    return expe(argc, argv);
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        test_xor();
+    }
+    else {
+        std::string a(argv[1]);
+        if (a == "xor") test_xor();
+        if (a == "gpr") GPR_test();
+        if (a == "expe1") return expe1(argc, argv);
+    }
 
     return 0;
 }
