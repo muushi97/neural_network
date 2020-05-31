@@ -5,6 +5,7 @@
 #include <memory>
 #include <random>
 #include <iomanip>
+#include <sstream>
 
 #include "trainer.hpp"
 #include "loader.hpp"
